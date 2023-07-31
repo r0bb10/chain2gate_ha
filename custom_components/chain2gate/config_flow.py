@@ -35,7 +35,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     gate = Chain2Gate(hass, data["host"])
 
-    if await hass.async_add_executor_job(gate.check_connection):
+    if await gate.check_connection(False):
 
         if DOMAIN in hass.data:
             for g in hass.data[DOMAIN].values():

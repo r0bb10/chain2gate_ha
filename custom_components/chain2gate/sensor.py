@@ -1,10 +1,13 @@
 """Platform for sensor integration of C2G."""
 from __future__ import annotations
+from datetime import date, datetime
+from decimal import Decimal
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
+    RestoreEntity
 )
 from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.const import TEMP_CELSIUS
@@ -12,7 +15,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType, StateType
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import DOMAIN
 
@@ -32,7 +36,7 @@ async def async_setup_entry(
         async_add_entities([C2GHASensor(gate, sensor)], update_before_add=True)
 
 
-class C2GHASensor(SensorEntity):
+class C2GHASensor(SensorEntity, RestoreEntity):
     """Representation of a Sensor."""
 
     def __init__(self, gate, c2g_sensor):
@@ -40,6 +44,7 @@ class C2GHASensor(SensorEntity):
         self.gate = gate
         self._c2g_sensor = c2g_sensor
         self._available = True
+        self._unit_of_measurement = c2g_sensor.unit_of_measurement
 
     @property
     def name(self) -> str:
@@ -47,18 +52,31 @@ class C2GHASensor(SensorEntity):
         return self._c2g_sensor.name
     
     @property
+    def native_value(self):
+        return self._state
+
+    @property
     def state(self):
         """Return the state of the device."""
         return self._state
     
     @property
+    def native_unit_of_measurement(self):
+        """Return the native unit of measurement of this entity, if any."""
+        return self._unit_of_measurement
+    
+    @property
     def unit_of_measurement(self):
         """Return the unit of measurement of this entity, if any."""
-        return self._c2g_sensor.unit_of_measurement
+        return self._unit_of_measurement
     
     @property
     def device_class(self):
         return self._c2g_sensor.device_class
+
+    @property
+    def state_class(self):
+        return self._c2g_sensor.state_class
 
     @property
     def unique_id(self) -> str:
@@ -88,13 +106,19 @@ class C2GHASensor(SensorEntity):
     
     async def async_added_to_hass(self):
         """Register callback to update hass after device was changed."""
+        await super().async_added_to_hass()
+        
+        # todo: seems like it does restore an old state, but it's not the last one
+        last_state = await self.async_get_last_state()
+        if last_state is not None:
+            self._state = last_state.state
+
         async def after_update_callback():
             """Call after device was updated."""
             await self.async_update_ha_state(True)
-        print("set callback")
         self._c2g_sensor.set_callback(after_update_callback)
-        print("callback set")
 
     async def async_update(self):
         """Retrieve latest state."""
         self._state = self._c2g_sensor.value
+        self._unit_of_measurement = self._c2g_sensor.unit_of_measurement
