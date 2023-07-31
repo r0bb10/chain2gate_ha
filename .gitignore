@@ -4,3 +4,4 @@
 !custom_components/
 !README.md
 !hacs.json
+__pycache__/

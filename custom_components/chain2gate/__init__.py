@@ -19,10 +19,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
 
-    gate = Chain2Gate(entry.data[CONF_HOST])
-    await hass.async_add_executor_job(gate.connect)
+    gate = Chain2Gate(hass, entry.data[CONF_HOST])
+    if not await hass.async_add_executor_job(gate.check_connection):
+        return False
+    
+    await gate.connect()
     hass.data[DOMAIN][entry.entry_id] = gate
-
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

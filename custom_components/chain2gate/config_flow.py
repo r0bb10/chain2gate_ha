@@ -31,13 +31,16 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
 
-    gate = await hass.async_add_executor_job(Chain2Gate, data["host"])
+    # gate = await hass.async_add_executor_job(Chain2Gate, hass, data["host"])
 
-    if await hass.async_add_executor_job(gate.connect):
+    gate = Chain2Gate(hass, data["host"])
 
-        for g in hass.data[DOMAIN].values():
-            if gate.id == g.id:
-                raise AlreadyConfigured()
+    if await hass.async_add_executor_job(gate.check_connection):
+
+        if DOMAIN in hass.data:
+            for g in hass.data[DOMAIN].values():
+                if gate.id == g.id:
+                    raise AlreadyConfigured()
 
         return {"title": gate.id}
     else:
