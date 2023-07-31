@@ -1,3 +1,6 @@
 *
 
+!.gitignore
 !custom_components/
+!README.md
+!hacs.json
