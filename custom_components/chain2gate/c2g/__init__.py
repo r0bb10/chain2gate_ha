@@ -4,6 +4,8 @@ import asyncio
 
 import logging
 
+from ..const import DOMAIN
+
 from homeassistant.const import UnitOfPower, UnitOfEnergy
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -52,12 +54,15 @@ class Chain2Gate:
     
     async def connect_async(self):
         while self._running:
-            async with websockets.connect(self.ws_url) as ws:
-                self._ws = ws
-                while self._running:
-                    msg = await ws.recv()
-                    await self.process_message(msg)
-            LOG.warning("Chain2Gate connection lost: %s", self.id)
+            try:
+                async with websockets.connect(self.ws_url) as ws:
+                    LOG.info("Chain2Gate connected: %s", self.id)
+                    self._ws = ws
+                    while self._running:
+                        msg = await ws.recv()
+                        await self.process_message(msg)
+            except Exception: # todo specify websocket closed exception
+                LOG.warning("Chain2Gate connection lost: %s", self.id)
             LOG.warning("Retrying in 10 seconds...")
             await asyncio.sleep(10)
 
@@ -66,17 +71,26 @@ class Chain2Gate:
         if "Chain2Data" in msg:
             msg = msg["Chain2Data"]
             if msg["Type"] == "CF1": # trama quartoraria
-                LOG.info("Chain2Gate message received CF1 frame")
+                LOG.debug("Chain2Gate message received CF1 frame")
                 await self.sens_tariff_code.set_value(msg["Payload"]["TariffCode"])
                 await self.sens_curr_quart_act_energy.set_value(msg["Payload"]["CurrQuartActEnergy"])
                 await self.sens_instant_power.set_value(msg["Payload"]["InstantPower"])
                 await self.sens_quart_average_power.set_value(msg["Payload"]["QuartAveragePower"])
                 await self.sens_total_act_energy.set_value(msg["Payload"]["TotalActEnergy"])
             elif msg["Type"] == "CF21": # trama superamento 300 W
-                LOG.info("Chain2Gate message received CF21 frame")
+                LOG.debug("Chain2Gate message received CF21 frame")
                 await self.sens_instant_power.set_value(msg["Payload"]["InstantPower"])
+            elif msg["Type"] == "CF22": # trama superamento potenza disponibile
+                LOG.debug("Chain2Gate message received CF22 frame")
+                await self.sens_instant_power.set_value(msg["Payload"]["InstantPower"])
+                evt_data = {
+                    "instant_power": msg["Payload"]["InstantPower"],
+                    "available_power": msg["Payload"]["AvailablePower"],
+                    "switch_off_seconds": msg["Payload"]["SwitchOffCountdownSeconds"]
+                }
+                self.hass.bus.async_fire(DOMAIN + "_power_limit_exceeded", event_data=evt_data)
             else:
-                LOG.warning("Chain2Gate message received %s frame", msg["Type"])
+                LOG.warning("Chain2Gate message received unknown %s frame", msg["Type"])
         elif "Chain2Info" in msg:
             pass
         
