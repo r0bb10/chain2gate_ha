@@ -10,7 +10,6 @@ from homeassistant.components.sensor import (
     RestoreEntity
 )
 from homeassistant.components.sensor.const import SensorDeviceClass
-from homeassistant.const import TEMP_CELSIUS
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import DeviceInfo
