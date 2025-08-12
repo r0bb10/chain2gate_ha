@@ -13,6 +13,10 @@
                 "data": {
                     "host": "Host"
                 }
+            },
+            "confirm": {
+                "title": "Add discovered Chain2Gate device",
+                "description": "A new Chain2Gate device was discovered.\n\nName: {name}\nIP Address: {ip}\n\nDo you want to add this device to Home Assistant?"
             }
         }
     }

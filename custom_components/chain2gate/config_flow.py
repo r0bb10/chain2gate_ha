@@ -52,6 +52,65 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    async def async_step_zeroconf(self, discovery_info):
+        """Handle zeroconf discovery."""
+        _LOGGER.error("DEBUG: async_step_zeroconf called with: %r", discovery_info)
+        _LOGGER.debug("Zeroconf discovery: %s", discovery_info)
+        ip = getattr(discovery_info, "ip_address", None)
+        if not ip and hasattr(discovery_info, "ip_addresses") and discovery_info.ip_addresses:
+            ip = discovery_info.ip_addresses[0]
+        ip_str = str(ip) if ip is not None else None
+        name = getattr(discovery_info, "name", None)
+        hostname = None
+        if name:
+            import re
+            match = re.search(r"c2g-[A-F0-9]+", name)
+            if match:
+                hostname = match.group(0)
+        display_name = hostname or name or ip_str
+        # Use hostname as unique_id
+        if not hostname:
+            # If hostname can't be extracted, abort
+            return self.async_abort(reason="unknown")
+        await self.async_set_unique_id(hostname)
+        # Check if already configured and update IP if needed
+        for entry in self._async_current_entries():
+            if entry.unique_id == hostname:
+                if entry.data.get(CONF_HOST) != ip_str:
+                    self.hass.config_entries.async_update_entry(
+                        entry, data={**entry.data, CONF_HOST: ip_str}
+                    )
+                return self.async_abort(reason="already_configured")
+        # Try to connect and validate
+        try:
+            gate = Chain2Gate(self.hass, ip_str)
+            if not await gate.check_connection(False):
+                raise CannotConnect()
+        except Exception:
+            raise CannotConnect()
+        # Store for confirmation step
+        self.context["title_placeholders"] = {"name": display_name}
+        self.discovery_info = {"title": display_name, CONF_HOST: ip_str}
+        return await self.async_step_confirm()
+
+    async def async_step_confirm(self, user_input=None):
+        """Show confirmation form to add discovered device."""
+        errors = {}
+        if user_input is not None:
+            return self.async_create_entry(
+                title=self.discovery_info["title"],
+                data={CONF_HOST: self.discovery_info[CONF_HOST]}
+            )
+        # Show device info in the confirmation dialog using translations
+        return self.async_show_form(
+            step_id="confirm",
+            description_placeholders={
+                "name": self.discovery_info["title"],
+                "ip": self.discovery_info[CONF_HOST],
+            },
+            errors=errors,
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:

@@ -15,5 +15,10 @@
     "websockets"
   ],
   "ssdp": [],
-  "zeroconf": []
+  "zeroconf": [
+    {
+      "type": "_http._tcp.local.",
+      "name": ".*c2g-.*"
+    }
+  ]
 }
